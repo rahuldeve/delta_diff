@@ -80,3 +80,22 @@ class PairDS(Dataset):
         to_rand_idx = random.randint(0, len(self.ds) - 1)
         to_rand_entry = self.ds[to_rand_idx]
         return {"from": from_entry, "to": to_rand_entry}
+
+
+class ContrastivePairDS(Dataset):
+    def __init__(self, ds, actual, predicted):
+        self.ds = ds
+        self.actual = actual
+        self.predicted = predicted
+
+    def __len__(self):
+        return len(self.ds)
+
+    def __getitem__(self, index):
+        from_entry = self.ds[index]
+
+        hard_idx = (self.predicted[index] - self.actual[index]).abs().argmax(dim=-1)
+        hard_idx = hard_idx.item()
+        to_hard_entry = self.ds[hard_idx]
+        return {"from": from_entry, "to": to_hard_entry}
+    
