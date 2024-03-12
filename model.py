@@ -179,6 +179,9 @@ class TripletDeltaModel(nn.Module):
         inv_loss = self.inversion_loss(
             anchor_embeddings, hard_embeddings, random_embeddings
         )
+        triangular_loss = self.triangular_loss(
+            anchor_embeddings, hard_embeddings, random_embeddings
+        )
         delta_loss = self.delta_loss(
             anchor_embeddings,
             hard_embeddings,
@@ -187,7 +190,7 @@ class TripletDeltaModel(nn.Module):
             batch_hard["score"],
             batch_random["score"],
         )
-        total_loss = id_loss + inv_loss + delta_loss
+        total_loss = id_loss + inv_loss + triangular_loss + delta_loss
 
         self.deallocate_cache()
 
@@ -195,5 +198,6 @@ class TripletDeltaModel(nn.Module):
             "loss": total_loss,
             "id_loss": id_loss,
             "inv_loss": inv_loss,
+            "triangular_loss": triangular_loss,
             "delta_loss": delta_loss,
         }
