@@ -66,6 +66,18 @@ def pair_collate(batch, base_collator):
 
     return {"from": batch_from, "to": batch_to}
 
+
+def batch_of_dict_collate(batch, base_collator):
+    # convert from list of dicts to dict of lists
+    dict_of_lists = defaultdict(list)
+    for entry in batch:
+        for k, v in entry.items():
+            dict_of_lists[k].append(v)
+
+    collated_batch = {k: base_collator(v) for k, v in dict_of_lists.items()}
+    return collated_batch
+
+
 # Try contrastive
 class PairDS(Dataset):
     def __init__(self, ds):
@@ -99,3 +111,24 @@ class ContrastivePairDS(Dataset):
         to_hard_entry = self.ds[hard_idx]
         return {"from": from_entry, "to": to_hard_entry}
     
+
+class ContrastiveTripletDS(Dataset):
+    def __init__(self, ds, actual, predicted):
+        self.ds = ds
+        self.actual = actual
+        self.predicted = predicted
+
+    def __len__(self):
+        return len(self.ds)
+
+    def __getitem__(self, index):
+        anch_entry = self.ds[index]
+
+        hard_idx = (self.predicted[index] - self.actual[index]).abs().argmax(dim=-1)
+        hard_idx = hard_idx.item()
+        hard_entry = self.ds[hard_idx]
+
+        rand_idx = random.randint(0, len(self.ds) - 1)
+        rand_entry = self.ds[rand_idx]
+
+        return {"anchor": anch_entry, "hard": hard_entry, "random": rand_entry}
