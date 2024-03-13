@@ -82,8 +82,15 @@ class TripletDeltaModel(nn.Module):
         self.delta_head = nn.Sequential(
             nn.Linear(2 * hidden_size, hidden_size),
             nn.PReLU(),
-            nn.Linear(hidden_size, 1),
+            nn.Linear(hidden_size, 256),
             nn.PReLU(),
+            nn.Linear(256, 128),
+            nn.PReLU(),
+            nn.Linear(128, 64),
+            nn.PReLU(),
+            nn.Linear(64, 32),
+            nn.PReLU(),
+            nn.Linear(32, 1),
         )
 
         self.cache = None
