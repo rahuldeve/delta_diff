@@ -33,7 +33,7 @@ def load_kasa_regression():
     df = df[["SMILES", "Average Average Z Score"]]
     df = df.rename({"SMILES": "smiles", "Average Average Z Score": "score"}, axis=1)
 
-    # df = standardize_df(df)
+    df = standardize_df(df)
 
     splits = train_val_test_split(
         X=df["smiles"].to_numpy(),
