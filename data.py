@@ -1,5 +1,6 @@
 import random
 from collections import defaultdict
+from itertools import chain
 
 import datasets as hds
 import pandas as pd
@@ -110,7 +111,7 @@ class ContrastivePairDS(Dataset):
         hard_idx = hard_idx.item()
         to_hard_entry = self.ds[hard_idx]
         return {"from": from_entry, "to": to_hard_entry}
-    
+
 
 class ContrastiveTripletDS(Dataset):
     def __init__(self, ds, actual, predicted):
@@ -132,3 +133,66 @@ class ContrastiveTripletDS(Dataset):
         rand_entry = self.ds[rand_idx]
 
         return {"anchor": anch_entry, "hard": hard_entry, "random": rand_entry}
+
+
+def list_of_dicts_to_dict_of_list(batch):
+    dict_of_lists = defaultdict(list)
+    for entry in batch:
+        for k, v in entry.items():
+            dict_of_lists[k].append(v)
+
+    return dict(dict_of_lists)
+
+
+def multiple_contrastive_collate(batch, base_collator):
+    # convert from list of dicts to dict of lists
+    batch_collected = list_of_dicts_to_dict_of_list(batch)
+    batch_collected = {
+        k: list_of_dicts_to_dict_of_list(v) for k, v in batch_collected.items()
+    }
+
+    batch_collected["anchor"] = base_collator(batch_collected["anchor"])
+    batch_collected["hard"] = base_collator(
+        {k: list(chain.from_iterable(v)) for k, v in batch_collected["hard"].items()}
+    )
+    batch_collected["random"] = base_collator(
+        {k: list(chain.from_iterable(v)) for k, v in batch_collected["random"].items()}
+    )
+    batch_collated = {k: base_collator(v) for k, v in batch_collected.items()}
+
+    B = len(batch)
+    n_hard = len(batch_collected["hard"]["score"]) // B
+    n_random = len(batch_collected["random"]["score"]) // B
+    batch_collated["hard"] = {
+        k: v.reshape(B, n_hard, -1).squeeze() for k, v in batch_collated["hard"].items()
+    }
+    batch_collated["random"] = {
+        k: v.reshape(B, n_random, -1).squeeze()
+        for k, v in batch_collated["random"].items()
+    }
+    return batch_collated
+
+
+class MultiContrastiveDS(Dataset):
+    def __init__(self, ds, actual, predicted):
+        self.ds = ds
+        self.actual = actual
+        self.predicted = predicted
+        self.n_candidates = 16
+        self.n_hard = int(0.5 * self.n_candidates)
+        self.n_random = self.n_candidates - self.n_hard
+
+    def __len__(self):
+        return len(self.ds)
+
+    def __getitem__(self, index):
+        anch_entry = self.ds[index]
+
+        pred_actual_diffs = (self.predicted[index] - self.actual[index]).abs()
+        topk_hard_idxs = pred_actual_diffs.topk(k=self.n_hard).indices
+        hard_entries = self.ds[topk_hard_idxs]
+
+        rand_idxs = [random.randint(0, len(self.ds) - 1) for _ in range(self.n_random)]
+        rand_entries = self.ds[rand_idxs]
+
+        return {"anchor": anch_entry, "hard": hard_entries, "random": rand_entries}
