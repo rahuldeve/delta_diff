@@ -80,13 +80,13 @@ class TripletDeltaModel(nn.Module):
 
         hidden_size = base_transformer.config.hidden_size
         self.delta_head = nn.Sequential(
+            nn.Linear(2 * hidden_size, 2 * hidden_size),
+            nn.PReLU(),
+            nn.Linear(2 * hidden_size, 2 * hidden_size),
+            nn.PReLU(),
             nn.Linear(2 * hidden_size, hidden_size),
             nn.PReLU(),
-            nn.Linear(hidden_size, 256),
-            nn.PReLU(),
-            nn.Linear(256, 128),
-            nn.PReLU(),
-            nn.Linear(128, 64),
+            nn.Linear(hidden_size, 64),
             nn.PReLU(),
             nn.Linear(64, 32),
             nn.PReLU(),
@@ -103,9 +103,7 @@ class TripletDeltaModel(nn.Module):
 
     def embed_batch(self, batch):
         batch = {k: v for k, v in batch.items() if k in ["input_ids", "attention_mask"]}
-        embeddings_chunk = self.embedder(**batch).last_hidden_state
-        embeddings_chunk = embeddings_chunk.sum(dim=-2)
-        # embeddings_chunk = nn.functional.normalize(embeddings_chunk)
+        embeddings_chunk = self.embedder(**batch).last_hidden_state[:, 0, :]
         return embeddings_chunk
 
     def get_delta(self, from_embedding, to_embedding):
@@ -125,9 +123,11 @@ class TripletDeltaModel(nn.Module):
         inp = torch.cat([from_embedding, to_embedding], axis=-1)
         return self.delta_head(inp).squeeze()
 
-    def identity_loss(self, anchor_embeddings):
-        diff = self.get_delta(anchor_embeddings, anchor_embeddings)
-        return diff.pow(2).mean()
+    def identity_loss(self, anchor_embeddings, hard_embeddings, random_embeddings):
+        anchor_loss = self.get_delta(anchor_embeddings, anchor_embeddings).pow(2).mean()
+        hard_loss = self.get_delta(hard_embeddings, hard_embeddings).pow(2).mean()
+        random_loss = self.get_delta(random_embeddings, random_embeddings).pow(2).mean()
+        return (anchor_loss + hard_loss + random_loss) / 3
 
     def inversion_loss(self, anchor_embeddings, hard_embeddings, random_embeddings):
         def helper(from_emb, to_emb):
@@ -138,7 +138,8 @@ class TripletDeltaModel(nn.Module):
 
         anchor_hard_loss = helper(anchor_embeddings, hard_embeddings)
         anchor_random_loss = helper(anchor_embeddings, random_embeddings)
-        loss = (anchor_hard_loss + anchor_random_loss) / 2
+        hard_random_loss = helper(hard_embeddings, random_embeddings)
+        loss = (anchor_hard_loss + anchor_random_loss + hard_random_loss) / 3
         return loss
 
     def triangular_loss(self, anchor_embeddings, hard_embeddings, random_embeddings):
@@ -169,7 +170,13 @@ class TripletDeltaModel(nn.Module):
             pred_anchor_random_delta, actual_anchor_random_delta
         )
 
-        return anchor_hard_delta_loss + anchor_random_delta_loss
+        pred_hard_random_delta = self.get_delta(hard_embeddings, random_embeddings)
+        actual_hard_random_delta = hard_scores - random_scores
+        anchor_random_delta_loss = F.mse_loss(
+            pred_hard_random_delta, actual_hard_random_delta
+        )
+
+        return (anchor_hard_delta_loss + anchor_random_delta_loss + anchor_random_delta_loss) / 3
 
     def forward(self, batch):
         self.initialize_cache()
@@ -182,7 +189,7 @@ class TripletDeltaModel(nn.Module):
         hard_embeddings = self.embed_batch(batch_hard)
         random_embeddings = self.embed_batch(batch_random)
 
-        id_loss = self.identity_loss(anchor_embeddings)
+        id_loss = self.identity_loss(anchor_embeddings, hard_embeddings, random_embeddings)
         inv_loss = self.inversion_loss(
             anchor_embeddings, hard_embeddings, random_embeddings
         )
