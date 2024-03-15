@@ -176,10 +176,12 @@ class MultiContrastiveTrainer:
                 "val/epoch": self.global_epoch,
                 "val/delta_mse": errors.pow(2).mean(),
                 "val/delta_r2": r2_score(
-                    actual_diffs.cpu().numpy(), pred_diffs.cpu().numpy
+                    actual_diffs.cpu().numpy(), pred_diffs.cpu().numpy()
                 ),
-                "val/delta_mean_worst_error": errors.abs().max(dim=-1).mean(),
-                "val/delta_worst_error": wandb.Histogram(errors.abs().max(dim=-1)),
+                "val/delta_mean_worst_error": errors.abs().max(dim=-1).values.mean(),
+                "val/delta_worst_error": wandb.Histogram(
+                    errors.abs().max(dim=-1).values
+                ),
             }
         )
 
