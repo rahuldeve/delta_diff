@@ -1,5 +1,6 @@
 import random
 from collections import defaultdict
+from functools import partial
 from itertools import chain
 
 import datasets as hds
@@ -174,13 +175,14 @@ def multiple_contrastive_collate(batch, base_collator):
 
 
 class MultiContrastiveDS(Dataset):
-    def __init__(self, ds, actual, predicted):
+    def __init__(self, ds, actual, predicted, base_collator):
         self.ds = ds
         self.actual = actual
         self.predicted = predicted
         self.n_candidates = 64
         self.n_hard = int(0.5 * self.n_candidates)
         self.n_random = self.n_candidates - self.n_hard
+        self.base_collator = base_collator
 
     def __len__(self):
         return len(self.ds)
@@ -196,3 +198,9 @@ class MultiContrastiveDS(Dataset):
         rand_entries = self.ds[rand_idxs]
 
         return {"anchor": anch_entry, "hard": hard_entries, "random": rand_entries}
+
+    def get_base_collator(self):
+        return self.base_collator
+
+    def get_contrastive_collator(self):
+        return partial(multiple_contrastive_collate, base_collator=self.base_collator)
