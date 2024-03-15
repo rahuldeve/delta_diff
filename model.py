@@ -228,7 +228,7 @@ class MultiContrastiveModel(nn.Module):
 
         hidden_size = base_transformer.config.hidden_size
         self.delta_head = nn.Sequential(
-            nn.LayerNorm(),
+            nn.LayerNorm(2 * hidden_size),
             nn.Linear(2 * hidden_size, 2 * hidden_size),
             nn.PReLU(),
             nn.Linear(2 * hidden_size, 2 * hidden_size),
