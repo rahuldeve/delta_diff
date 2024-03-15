@@ -2,17 +2,18 @@ from collections import defaultdict, deque
 from functools import partial
 from statistics import mean
 
+import datasets as hds
 import torch
 import torch.nn.functional as F
+from sklearn.metrics import r2_score
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
+from transformers import DataCollatorWithPadding
 
 import wandb
 from config import TrainArgs
 from data import MultiContrastiveDS
-import datasets as hds
 from model import MultiContrastiveModel
-from transformers import DataCollatorWithPadding
 
 
 def move_contrastive_batch_to_device(batch, device):
@@ -128,7 +129,7 @@ class MultiContrastiveTrainer:
         self.global_epoch = 0
         self.train_loss_accumulator = LossAccumulator(args.train_log_steps)
 
-        wandb.watch(self.model, log="gradients", log_freq=20)
+        wandb.watch(self.model, log="gradients", log_freq=100)
 
     def train_step(self, batch):
         self.optimizer.zero_grad()
@@ -168,14 +169,17 @@ class MultiContrastiveTrainer:
             self.train_dl.dataset.get_base_collator(),
             self.args,
         )
-        total_delta_mse = F.mse_loss(pred_diffs, actual_diffs).cpu().item()
+
+        errors = pred_diffs - actual_diffs
         wandb.log(
             {
                 "val/epoch": self.global_epoch,
-                "val/total_delta_mse": total_delta_mse,
-                "val/total_delta_hist": wandb.Histogram(
-                    (actual_diffs - pred_diffs).abs().flatten().cpu()
+                "val/delta_mse": errors.pow(2).mean(),
+                "val/delta_r2": r2_score(
+                    actual_diffs.cpu().numpy(), pred_diffs.cpu().numpy
                 ),
+                "val/delta_mean_worst_error": errors.abs().max(dim=-1).mean(),
+                "val/delta_worst_error": wandb.Histogram(errors.abs().max(dim=-1)),
             }
         )
 
