@@ -110,7 +110,7 @@ class LossAccumulator:
 class MultiContrastiveTrainer:
     def __init__(
         self,
-        model: MultiContrastiveDS,
+        model: MultiContrastiveModel,
         optimizer,
         scheduler,
         train_dl: DataLoader,
@@ -180,7 +180,7 @@ class MultiContrastiveTrainer:
                 ),
                 "val/delta_mean_worst_error": errors.abs().max(dim=-1).values.mean(),
                 "val/delta_worst_error": wandb.Histogram(
-                    errors.abs().max(dim=-1).values
+                    errors.abs()
                 ),
             }
         )
