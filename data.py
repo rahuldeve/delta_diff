@@ -9,6 +9,7 @@ from astartes import train_val_test_split
 from torch.utils.data import Dataset
 
 from utils import parallelize, standardize
+from config import TrainArgs
 
 
 @parallelize(8)
@@ -30,7 +31,7 @@ def tokenize(entry, tokenizer):
     return encoded
 
 
-def load_kasa_regression():
+def load_kasa_regression(args: TrainArgs):
     df = pd.read_csv("./KasA_SMM_regression.csv")
     df = df[["SMILES", "Average Average Z Score"]]
     df = df.rename({"SMILES": "smiles", "Average Average Z Score": "score"}, axis=1)
@@ -41,7 +42,7 @@ def load_kasa_regression():
         X=df["smiles"].to_numpy(),
         y=df["score"].to_numpy(),
         sampler="scaffold",
-        random_state=42,
+        random_state=args.random_seed,
         return_indices=True,
     )
 

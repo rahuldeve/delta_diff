@@ -1,15 +1,20 @@
-from typing import Callable, ParamSpec, Concatenate
+import random
+from functools import wraps
+from typing import Callable, Concatenate, ParamSpec
 
+import numpy as np
+import pandas as pd
+import torch
+from joblib import Parallel, delayed
 from rdkit import Chem
 from rdkit.Chem.MolStandardize import rdMolStandardize  # type: ignore
 from rdkit.rdBase import BlockLogs
 
-import random
-import numpy as np
-import pandas as pd
 
-from joblib import Parallel, delayed
-from functools import wraps
+def set_seeds(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
 
 
 def standardize(smiles):
@@ -50,9 +55,7 @@ BaseFunc = Callable[Concatenate[pd.DataFrame, Param], pd.DataFrame]
 WrappedFunc = Callable[Concatenate[pd.DataFrame, Param], pd.DataFrame]
 
 
-def parallelize(
-    n_jobs: int = 4
-) -> Callable[[BaseFunc], WrappedFunc]:
+def parallelize(n_jobs: int = 4) -> Callable[[BaseFunc], WrappedFunc]:
     def _inner(f: BaseFunc) -> WrappedFunc:
         @wraps(f)
         def parallel_func(

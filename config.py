@@ -19,3 +19,5 @@ class TrainArgs:
     eval_steps = 100
     train_log_steps = 100
     save_steps = 100
+
+    random_seed = 42
