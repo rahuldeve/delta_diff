@@ -34,7 +34,15 @@ def tokenize(entry, tokenizer):
 def load_kasa_regression(args: TrainArgs):
     df = pd.read_csv("./KasA_SMM_regression.csv")
     df = df[["SMILES", "Average Average Z Score"]]
-    df = df.rename({"SMILES": "smiles", "Average Average Z Score": "score"}, axis=1)
+    df = df.rename(
+        {
+            "SMILES": "smiles",
+            "Average Average Z Score": "score",
+            "Assay Role": "hit_call",
+        },
+        axis=1,
+    )
+    df['hit_call'] = df['hit_call'].map({'Assay Positive': True, 'Assay Negative': False})
 
     df = standardize_df(df)
 
@@ -50,6 +58,10 @@ def load_kasa_regression(args: TrainArgs):
     df_train = df.iloc[train_ids].reset_index(drop=True)
     df_val = df.iloc[val_ids].reset_index(drop=True)
     df_test = df.iloc[test_ids].reset_index(drop=True)
+
+    df_train = df_train.drop(['hit_call'], axis=1)
+    df_val = df_val.drop(['hit_call'], axis=1)
+    df_test = df_test.drop(['hit_call'], axis=1)
 
     return hds.DatasetDict(
         {
