@@ -2,12 +2,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import AutoModel
+from copy import deepcopy
 
 
 class DeltaModel(nn.Module):
     def __init__(self, base_transformer: AutoModel) -> None:
         super().__init__()
-        self.embedder = base_transformer
+        self.from_encoder = base_transformer
+        self.to_encoder = deepcopy(base_transformer)
 
         hidden_size = base_transformer.config.hidden_size
         self.delta_head = nn.Sequential(
