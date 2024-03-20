@@ -31,7 +31,8 @@ def embed_split(
     padding_collator: DataCollatorWithPadding,
     args: TrainArgs,
 ):
-    embeddings = []
+    from_embeddings = []
+    to_embeddings = []
     device = next(model.parameters()).device
     for batch in DataLoader(
         split_ds,
@@ -40,11 +41,12 @@ def embed_split(
         collate_fn=padding_collator,
     ):
         batch = {k: v.to(device) for k, v in batch.items()}
-        batch_embeddings = model.embed_batch(batch)
-        embeddings.append(batch_embeddings.cpu())
+        from_embeddings.append(model.from_embed_batch(batch).cpu())
+        to_embeddings.append(model.to_embed_batch(batch).cpu())
 
-    embeddings = torch.cat(embeddings, dim=0)
-    return embeddings.to(device)
+    from_embeddings = torch.cat(from_embeddings, dim=0)
+    to_embeddings = torch.cat(to_embeddings, dim=0)
+    return from_embeddings.to(device), to_embeddings.to(device)
 
 
 @torch.no_grad()
@@ -61,14 +63,14 @@ def get_predicted_diffs_for_split(
     padding_collator: DataCollatorWithPadding,
     args: TrainArgs,
 ):
-    embeddings = embed_split(split_ds, model, padding_collator, args)
+    from_embeddings, to_embeddings = embed_split(split_ds, model, padding_collator, args)
 
-    N = embeddings.shape[0]
+    N = from_embeddings.shape[0]
     pred_delta = torch.zeros((N, N))
     for row_idx in range(N):
         pred_delta_row = model.get_delta(
-            from_embedding=embeddings[[row_idx]].expand_as(embeddings),
-            to_embedding=embeddings,
+            from_embedding=from_embeddings[[row_idx]].expand_as(to_embeddings),
+            to_embedding=to_embeddings,
         )
         pred_delta[row_idx, :] = pred_delta_row.squeeze()
 

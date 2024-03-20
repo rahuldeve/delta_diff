@@ -226,7 +226,8 @@ class TripletDeltaModel(nn.Module):
 class MultiContrastiveModel(nn.Module):
     def __init__(self, base_transformer: AutoModel) -> None:
         super().__init__()
-        self.embedder = base_transformer
+        self.from_encoder = base_transformer
+        self.to_encoder = deepcopy(base_transformer)
 
         hidden_size = base_transformer.config.hidden_size
         self.delta_head = nn.Sequential(
@@ -252,9 +253,14 @@ class MultiContrastiveModel(nn.Module):
     def deallocate_cache(self):
         self.cache = None
 
-    def embed_batch(self, batch):
+    def from_embed_batch(self, batch):
         batch = {k: v for k, v in batch.items() if k in ["input_ids", "attention_mask"]}
-        embeddings_chunk = self.embedder(**batch).last_hidden_state[:, 0, :]
+        embeddings_chunk = self.from_encoder(**batch).last_hidden_state[:, 0, :]
+        return embeddings_chunk
+    
+    def to_embed_batch(self, batch):
+        batch = {k: v for k, v in batch.items() if k in ["input_ids", "attention_mask"]}
+        embeddings_chunk = self.to_encoder(**batch).last_hidden_state[:, 0, :]
         return embeddings_chunk
 
     def get_delta(self, from_embedding, to_embedding):
@@ -359,15 +365,15 @@ class MultiContrastiveModel(nn.Module):
         batch_hard = batch["hard"]
         batch_random = batch["random"]
 
-        anchor_embeddings = self.embed_batch(batch_anchor)
+        anchor_embeddings = self.from_embed_batch(batch_anchor)
         B = batch_hard["input_ids"].shape[0]
         n_hard = batch_hard["input_ids"].shape[1]
         n_rand = batch_random["input_ids"].shape[1]
-        hard_embeddings = self.embed_batch(
+        hard_embeddings = self.to_embed_batch(
             {k: v.view(B * n_hard, -1) for k, v in batch_hard.items()}
         ).view(B, n_hard, -1)
 
-        random_embeddings = self.embed_batch(
+        random_embeddings = self.to_embed_batch(
             {k: v.view(B * n_rand, -1) for k, v in batch_random.items()}
         ).view(B, n_rand, -1)
 
