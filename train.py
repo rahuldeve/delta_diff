@@ -85,7 +85,6 @@ def get_predicted_diffs_for_split(
     pred_delta = torch.zeros((N, N))
     for row_idx in range(N):
         for chunk_st, chunk_en in get_chunk_idxs(N, 64):
-            print(chunk_st, chunk_en)
             to_chunk = to_embeddings[chunk_st: chunk_en].clone().to(device)
             from_chunk = from_embeddings[[row_idx]].expand_as(to_chunk).to(device)
             pred_delta_row = model.get_delta(
