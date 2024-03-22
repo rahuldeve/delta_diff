@@ -46,7 +46,7 @@ def embed_split(
 
     from_embeddings = torch.cat(from_embeddings, dim=0)
     to_embeddings = torch.cat(to_embeddings, dim=0)
-    return from_embeddings.to(device), to_embeddings.to(device)
+    return from_embeddings, to_embeddings
 
 
 @torch.no_grad()
@@ -54,6 +54,18 @@ def get_actual_diffs_for_split(split_ds: hds.Dataset):
     val_scores = torch.tensor(split_ds["score"])
     actual_diffs = val_scores.unsqueeze(-1) - val_scores.unsqueeze(0)
     return actual_diffs.cpu()
+
+def get_chunk_idxs(N, chunk_size=64):
+    st = 0
+    en = chunk_size
+    idxs = []
+    while st <= N:
+        idxs.append((st, en))
+        st += chunk_size
+        en += chunk_size
+
+    return idxs
+    
 
 
 @torch.no_grad()
@@ -63,16 +75,24 @@ def get_predicted_diffs_for_split(
     padding_collator: DataCollatorWithPadding,
     args: TrainArgs,
 ):
-    from_embeddings, to_embeddings = embed_split(split_ds, model, padding_collator, args)
+    device = next(model.parameters()).device
 
-    N = from_embeddings.shape[0]
+    from_embeddings, to_embeddings = embed_split(
+        split_ds, model, padding_collator, args
+    )
+
+    N, _ = from_embeddings.shape
     pred_delta = torch.zeros((N, N))
     for row_idx in range(N):
-        pred_delta_row = model.get_delta(
-            from_embedding=from_embeddings[[row_idx]].expand_as(to_embeddings),
-            to_embedding=to_embeddings,
-        )
-        pred_delta[row_idx, :] = pred_delta_row.squeeze()
+        for chunk_st, chunk_en in get_chunk_idxs(N, 64):
+            print(chunk_st, chunk_en)
+            to_chunk = to_embeddings[chunk_st: chunk_en].clone().to(device)
+            from_chunk = from_embeddings[[row_idx]].expand_as(to_chunk).to(device)
+            pred_delta_row = model.get_delta(
+                from_embedding=from_chunk,
+                to_embedding=to_chunk,
+            )
+            pred_delta[row_idx, chunk_st:chunk_en] = pred_delta_row.squeeze().cpu()
 
     return pred_delta.cpu()
 
@@ -181,9 +201,7 @@ class MultiContrastiveTrainer:
                     actual_diffs.cpu().numpy(), pred_diffs.cpu().numpy()
                 ),
                 "val/delta_mean_worst_error": errors.abs().max(dim=-1).values.mean(),
-                "val/delta_worst_error": wandb.Histogram(
-                    errors.abs()
-                ),
+                "val/delta_worst_error": wandb.Histogram(errors.abs()),
             }
         )
 
