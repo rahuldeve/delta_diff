@@ -54,6 +54,18 @@ def get_actual_diffs_for_split(split_ds: hds.Dataset):
     return actual_diffs.cpu()
 
 
+def get_chunk_idxs(N, chunk_size=64):
+    st = 0
+    en = chunk_size
+    idxs = []
+    while st <= N:
+        idxs.append((st, en))
+        st += chunk_size
+        en += chunk_size
+
+    return idxs
+
+
 @torch.no_grad()
 def get_predicted_diffs_for_split(
     split_ds: hds.Dataset,
@@ -61,16 +73,22 @@ def get_predicted_diffs_for_split(
     padding_collator: DataCollatorWithPadding,
     args: TrainArgs,
 ):
+    device = next(model.parameters()).device
     embeddings = embed_split(split_ds, model, padding_collator, args)
 
     N = embeddings.shape[0]
     pred_delta = torch.zeros((N, N))
-    for row_idx in range(N):
-        pred_delta_row = model.get_delta(
-            from_embedding=embeddings[[row_idx]].expand_as(embeddings),
-            to_embedding=embeddings,
-        )
-        pred_delta[row_idx, :] = pred_delta_row.squeeze()
+    for row_idx in tqdm(range(N), desc="pairwise"):
+        from_chunk = embeddings[[row_idx]].to(device)
+
+        for chunk_st, chunk_en in get_chunk_idxs(N, 4096):
+            to_chunk = embeddings[chunk_st:chunk_en].clone().to(device)
+
+            pred_delta_row = model.get_delta(
+                from_embedding=from_chunk.expand_as(to_chunk),
+                to_embedding=to_chunk,
+            )
+            pred_delta[row_idx, chunk_st:chunk_en] = pred_delta_row.squeeze().cpu()
 
     return pred_delta.cpu()
 
@@ -179,9 +197,7 @@ class MultiContrastiveTrainer:
                     actual_diffs.cpu().numpy(), pred_diffs.cpu().numpy()
                 ),
                 "val/delta_mean_worst_error": errors.abs().max(dim=-1).values.mean(),
-                "val/delta_worst_error": wandb.Histogram(
-                    errors.abs()
-                ),
+                "val/delta_worst_error": wandb.Histogram(errors.abs()),
             }
         )
 
