@@ -169,14 +169,21 @@ class MultiContrastiveTrainer:
         train_ds: MultiContrastiveDS = self.train_dl.dataset
         padding_collator = train_ds.get_base_collator()
         updated_predicted_deltas = get_predicted_diffs_for_split(
-            split_ds=train_ds.dataset,
+            split_ds=train_ds.ds,
             model=self.model,
             padding_collator=padding_collator,
             args=self.args,
         )
 
         train_ds.predicted = updated_predicted_deltas
-        self.train_dl.dataset = train_ds
+        self.train_dl = DataLoader(
+            train_ds,
+            batch_size=self.args.contrastive_train_batch_size,
+            shuffle=True,
+            collate_fn=train_ds.get_contrastive_collator(),
+            drop_last=True,
+            num_workers=self.args.num_dataloader_workers
+        )
 
     def validate(self):
         self.model.eval()
@@ -224,6 +231,7 @@ class MultiContrastiveTrainer:
             self.step_triggers()
 
         self.global_epoch += 1
+        self.update_hard_negatives()
 
     def train(self):
         self.validate()

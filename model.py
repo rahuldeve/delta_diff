@@ -172,12 +172,12 @@ class TripletDeltaModel(nn.Module):
 
         pred_hard_random_delta = self.get_delta(hard_embeddings, random_embeddings)
         actual_hard_random_delta = hard_scores - random_scores
-        anchor_random_delta_loss = F.mse_loss(
+        hard_random_delta_loss = F.mse_loss(
             pred_hard_random_delta, actual_hard_random_delta
         )
 
         return (
-            anchor_hard_delta_loss + anchor_random_delta_loss + anchor_random_delta_loss
+            anchor_hard_delta_loss + anchor_random_delta_loss + hard_random_delta_loss
         ) / 3
 
     def forward(self, batch):
@@ -342,12 +342,12 @@ class MultiContrastiveModel(nn.Module):
 
         actual_hard_random_delta = hard_scores - random_scores
         pred_hard_random_delta = self.get_delta(hard_embeddings, random_embeddings)
-        anchor_random_delta_loss = F.mse_loss(
+        hard_random_delta_loss = F.mse_loss(
             pred_hard_random_delta, actual_hard_random_delta
         )
 
         return (
-            anchor_hard_delta_loss + anchor_random_delta_loss + anchor_random_delta_loss
+            anchor_hard_delta_loss + anchor_random_delta_loss + hard_random_delta_loss
         ) / 3
 
     def forward(self, batch):

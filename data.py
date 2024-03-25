@@ -33,7 +33,7 @@ def tokenize(entry, tokenizer):
 
 def load_kasa_regression(args: TrainArgs):
     df = pd.read_csv("./KasA_SMM_regression.csv")
-    df = df[["SMILES", "Average Average Z Score"]]
+    df = df[["SMILES", "Average Average Z Score", "Assay Role"]]
     df = df.rename(
         {
             "SMILES": "smiles",
