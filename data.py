@@ -193,7 +193,7 @@ class MultiContrastiveDS(Dataset):
         self.actual = actual
         self.predicted = predicted
         self.n_candidates = 64
-        self.n_hard = int(0.5 * self.n_candidates)
+        self.n_hard = int(0.9 * self.n_candidates)
         self.n_random = self.n_candidates - self.n_hard
         self.base_collator = base_collator
 
